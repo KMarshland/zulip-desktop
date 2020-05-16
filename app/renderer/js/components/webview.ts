@@ -24,7 +24,6 @@ interface WebViewProps {
 	nodeIntegration: boolean;
 	preload: boolean;
 	onTitleChange: () => void;
-	ignoreCerts?: boolean;
 	hasPermission?: (origin: string, permission: string) => boolean;
 }
 
@@ -32,11 +31,13 @@ export default class WebView extends BaseComponent {
 	props: WebViewProps;
 	zoomFactor: number;
 	badgeCount: number;
+	hasUnreads: boolean;
 	loading: boolean;
 	customCSS: string;
 	$webviewsContainer: DOMTokenList;
 	$el: Electron.WebviewTag;
 	domReady?: Promise<void>;
+	afterPageChange?: Function;
 
 	constructor(props: WebViewProps) {
 		super();
@@ -83,10 +84,34 @@ export default class WebView extends BaseComponent {
 			});
 		}
 
+		let executed = false;
 		this.$el.addEventListener('page-title-updated', event => {
 			const {title} = event;
 			this.badgeCount = this.getBadgeCount(title);
+			this.hasUnreads = this.getHasUnreads(title);
 			this.props.onTitleChange();
+
+			if (!executed) {
+				executed = true;
+				this.$el.executeJavaScript('(' + (function () {
+					// @ts-ignore
+					if (!window.pollUnreads) {
+						// @ts-ignore
+						window.pollUnreads = function () {
+							const unreadCount = parseInt(document.getElementsByClassName('top_left_all_messages')[0].getElementsByClassName('value')[0].innerHTML) || 0;
+							const mentionCount = parseInt(document.getElementsByClassName('top_left_mentions')[0].getElementsByClassName('value')[0].innerHTML) || 0;
+
+							document.title = `COUNTS-[${unreadCount}]-(${mentionCount})`;
+
+							// @ts-ignore
+							requestAnimationFrame(window.pollUnreads);
+						}
+
+						// @ts-ignore
+						requestAnimationFrame(window.pollUnreads);
+					}
+				}).toString() + ')();');
+			}
 		});
 
 		this.$el.addEventListener('did-navigate-in-page', event => {
@@ -158,6 +183,10 @@ export default class WebView extends BaseComponent {
 	getBadgeCount(title: string): number {
 		const messageCountInTitle = (/\((\d+)\)/).exec(title);
 		return messageCountInTitle ? Number(messageCountInTitle[1]) : 0;
+	}
+
+	getHasUnreads(title: string): boolean {
+		return !title.includes('[0]');
 	}
 
 	showNotificationSettings(): void {

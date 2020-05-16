@@ -22,6 +22,7 @@ const globalPatched = global as PatchedGlobal;
 // Prevent window being garbage collected
 let mainWindow: Electron.BrowserWindow;
 let badgeCount: number;
+let hasUnreads : boolean;
 
 let isQuitting = false;
 
@@ -225,7 +226,6 @@ app.on('ready', () => {
 	) /* eslint-disable-line max-params */ => {
 		// TODO: The entire concept of selectively ignoring certificate errors
 		// is ill-conceived, and this handler needs to be deleted.
-		event.preventDefault();
 
 		const {origin} = new URL(url);
 		const filename = CertificateUtil.getCertificate(encodeURIComponent(origin));
@@ -237,6 +237,7 @@ app.on('ready', () => {
 				);
 				if (certificate.data.replace(/[\r\n]/g, '') ===
 					savedCertificate.replace(/[\r\n]/g, '')) {
+					event.preventDefault();
 					callback(true);
 					return;
 				}
@@ -245,20 +246,11 @@ app.on('ready', () => {
 			}
 		}
 
-		page.send(
-			'certificate-error',
-			webContents.id === mainWindow.webContents.id ? null : webContents.id,
-			makeRendererCallback(ignore => {
-				callback(ignore);
-				if (!ignore) {
-					dialog.showErrorBox(
-						'Certificate error',
-						`The server presented an invalid certificate for ${origin}:
+		dialog.showErrorBox(
+			'Certificate error',
+			`The server presented an invalid certificate for ${origin}:
 
 ${error}`
-					);
-				}
-			})
 		);
 	});
 
@@ -330,7 +322,7 @@ ${error}`
 	});
 
 	ipcMain.on('toggle-badge-option', () => {
-		BadgeSettings.updateBadge(badgeCount, mainWindow);
+		BadgeSettings.updateBadge(hasUnreads, badgeCount, mainWindow);
 	});
 
 	ipcMain.on('toggle-menubar', (_event: Electron.IpcMainEvent, showMenubar: boolean) => {
@@ -339,9 +331,10 @@ ${error}`
 		page.send('toggle-autohide-menubar', showMenubar, true);
 	});
 
-	ipcMain.on('update-badge', (_event: Electron.IpcMainEvent, messageCount: number) => {
+	ipcMain.on('update-badge', (_event: Electron.IpcMainEvent, messageCount: number, currentlyHasUnreads: boolean) => {
 		badgeCount = messageCount;
-		BadgeSettings.updateBadge(badgeCount, mainWindow);
+		hasUnreads = currentlyHasUnreads;
+		BadgeSettings.updateBadge(hasUnreads, badgeCount, mainWindow);
 		page.send('tray', messageCount);
 	});
 

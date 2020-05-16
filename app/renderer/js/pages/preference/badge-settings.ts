@@ -2,11 +2,15 @@ import electron, {app} from 'electron';
 
 import * as ConfigUtil from '../../utils/config-util';
 
-function showBadgeCount(messageCount: number, mainWindow: electron.BrowserWindow): void {
+function showBadgeCount(hasUnreads: boolean, messageCount: number, mainWindow: electron.BrowserWindow): void {
 	if (process.platform === 'win32') {
 		updateOverlayIcon(messageCount, mainWindow);
 	} else {
-		app.badgeCount = messageCount;
+		if (messageCount > 0 || !hasUnreads) {
+			app.badgeCount = messageCount;
+		} else {
+			app.dock.setBadge('•');
+		}
 	}
 }
 
@@ -18,9 +22,9 @@ function hideBadgeCount(mainWindow: electron.BrowserWindow): void {
 	}
 }
 
-export function updateBadge(badgeCount: number, mainWindow: electron.BrowserWindow): void {
+export function updateBadge(hasUnreads: boolean, badgeCount: number, mainWindow: electron.BrowserWindow): void {
 	if (ConfigUtil.getConfigItem('badgeOption', true)) {
-		showBadgeCount(badgeCount, mainWindow);
+		showBadgeCount(hasUnreads, badgeCount, mainWindow);
 	} else {
 		hideBadgeCount(mainWindow);
 	}

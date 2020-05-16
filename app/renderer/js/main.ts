@@ -360,7 +360,6 @@ class ServerManagerView {
 				url: server.url,
 				role: 'server',
 				name: CommonUtil.decodeString(server.alias),
-				ignoreCerts: server.ignoreCerts,
 				hasPermission: (origin: string, permission: string) =>
 					origin === server.url && permission === 'notifications',
 				isActive: () => {
@@ -706,15 +705,18 @@ class ServerManagerView {
 
 	updateBadge(): void {
 		let messageCountAll = 0;
+		let hasUnreads = false;
+
 		for (const tab of this.tabs) {
 			if (tab && tab instanceof ServerTab && tab.updateBadge) {
 				const count = tab.webview.badgeCount;
+				hasUnreads = hasUnreads || tab.webview.hasUnreads;
 				messageCountAll += count;
 				tab.updateBadge(count);
 			}
 		}
 
-		ipcRenderer.send('update-badge', messageCountAll);
+		ipcRenderer.send('update-badge', messageCountAll, hasUnreads);
 	}
 
 	updateGeneralSettings(setting: string, value: unknown): void {
@@ -815,21 +817,6 @@ class ServerManagerView {
 				}
 			});
 		}
-
-		ipcRenderer.on('certificate-error', (
-			event: Event,
-			webContentsId: number | null,
-			rendererCallbackId: number
-		) => {
-			const ignore = webContentsId !== null &&
-				this.tabs.some(
-					({webview}) =>
-						!webview.loading &&
-						webview.$el.getWebContentsId() === webContentsId &&
-						webview.props.ignoreCerts
-				);
-			ipcRenderer.send('renderer-callback', rendererCallbackId, ignore);
-		});
 
 		ipcRenderer.on('permission-request', (
 			event: Event,
