@@ -1,28 +1,22 @@
-import {app, shell, BrowserWindow, Menu, dialog} from 'electron';
-import {appUpdater} from './autoupdater';
+import {app, shell, BrowserWindow, Menu} from 'electron';
 
 import AdmZip from 'adm-zip';
-import fs from 'fs-extra';
-import path from 'path';
-import * as DNDUtil from '../renderer/js/utils/dnd-util';
-import Logger from '../renderer/js/utils/logger-util';
+
+import type {TabData} from '../renderer/js/main';
 import * as ConfigUtil from '../renderer/js/utils/config-util';
+import * as DNDUtil from '../renderer/js/utils/dnd-util';
 import * as LinkUtil from '../renderer/js/utils/link-util';
 import * as t from '../renderer/js/utils/translation-util';
-import type {ServerOrFunctionalTab} from '../renderer/js/main';
+
+import {appUpdater} from './autoupdater';
 
 export interface MenuProps {
-	tabs: ServerOrFunctionalTab[];
+	tabs: TabData[];
 	activeTabIndex?: number;
 	enableMenu?: boolean;
 }
 
 const appName = app.name;
-
-const logger = new Logger({
-	file: 'errors.log',
-	timestamp: true
-});
 
 function getHistorySubmenu(enableMenu: boolean): Electron.MenuItemConstructorOptions[] {
 	return [{
@@ -49,8 +43,8 @@ function getHistorySubmenu(enableMenu: boolean): Electron.MenuItemConstructorOpt
 function getToolsSubmenu(): Electron.MenuItemConstructorOptions[] {
 	return [{
 		label: t.__('Check for Updates'),
-		click() {
-			checkForUpdate();
+		async click() {
+			await checkForUpdate();
 		}
 	},
 	{
@@ -61,13 +55,6 @@ function getToolsSubmenu(): Electron.MenuItemConstructorOptions[] {
 	},
 	{
 		type: 'separator'
-	},
-	{
-		label: t.__('Factory Reset'),
-		accelerator: process.platform === 'darwin' ? 'Command+Shift+D' : 'Ctrl+Shift+D',
-		async click() {
-			await resetAppSettings();
-		}
 	},
 	{
 		label: t.__('Download App Logs'),
@@ -135,7 +122,7 @@ function getViewSubmenu(): Electron.MenuItemConstructorOptions[] {
 		role: 'togglefullscreen'
 	}, {
 		label: t.__('Zoom In'),
-		role: 'zoomIn',
+		accelerator: 'CommandOrControl+=',
 		click(_item, focusedWindow) {
 			if (focusedWindow) {
 				sendAction('zoomIn');
@@ -143,7 +130,6 @@ function getViewSubmenu(): Electron.MenuItemConstructorOptions[] {
 		}
 	}, {
 		label: t.__('Zoom Out'),
-		role: 'zoomOut',
 		accelerator: 'CommandOrControl+-',
 		click(_item, focusedWindow) {
 			if (focusedWindow) {
@@ -152,7 +138,6 @@ function getViewSubmenu(): Electron.MenuItemConstructorOptions[] {
 		}
 	}, {
 		label: t.__('Actual Size'),
-		role: 'resetZoom',
 		accelerator: 'CommandOrControl+0',
 		click(_item, focusedWindow) {
 			if (focusedWindow) {
@@ -230,7 +215,7 @@ function getHelpSubmenu(): Electron.MenuItemConstructorOptions[] {
 	];
 }
 
-function getWindowSubmenu(tabs: ServerOrFunctionalTab[], activeTabIndex: number): Electron.MenuItemConstructorOptions[] {
+function getWindowSubmenu(tabs: TabData[], activeTabIndex: number): Electron.MenuItemConstructorOptions[] {
 	const initialSubmenu: Electron.MenuItemConstructorOptions[] = [{
 		label: t.__('Minimize'),
 		role: 'minimize'
@@ -246,17 +231,17 @@ function getWindowSubmenu(tabs: ServerOrFunctionalTab[], activeTabIndex: number)
 		});
 		tabs.forEach(tab => {
 			// Do not add functional tab settings to list of windows in menu bar
-			if (tab.props.role === 'function' && tab.props.name === 'Settings') {
+			if (tab.role === 'function' && tab.name === 'Settings') {
 				return;
 			}
 
 			initialSubmenu.push({
-				label: tab.props.name,
-				accelerator: tab.props.role === 'function' ? '' : `${ShortcutKey} + ${tab.props.index + 1}`,
-				checked: tab.props.index === activeTabIndex,
+				label: tab.name,
+				accelerator: tab.role === 'function' ? '' : `${ShortcutKey} + ${tab.index + 1}`,
+				checked: tab.index === activeTabIndex,
 				click(_item, focusedWindow) {
 					if (focusedWindow) {
-						sendAction('switch-server-tab', tab.props.index);
+						sendAction('switch-server-tab', tab.index);
 					}
 				},
 				type: 'checkbox'
@@ -558,56 +543,26 @@ function sendAction(action: string, ...parameters: unknown[]): void {
 	win.webContents.send(action, ...parameters);
 }
 
-function checkForUpdate(): void {
-	appUpdater(true);
+async function checkForUpdate(): Promise<void> {
+	await appUpdater(true);
 }
 
-function getNextServer(tabs: ServerOrFunctionalTab[], activeTabIndex: number): number {
+function getNextServer(tabs: TabData[], activeTabIndex: number): number {
 	do {
 		activeTabIndex = (activeTabIndex + 1) % tabs.length;
 	}
-	while (tabs[activeTabIndex].props.role !== 'server');
+	while (tabs[activeTabIndex].role !== 'server');
 
 	return activeTabIndex;
 }
 
-function getPreviousServer(tabs: ServerOrFunctionalTab[], activeTabIndex: number): number {
+function getPreviousServer(tabs: TabData[], activeTabIndex: number): number {
 	do {
 		activeTabIndex = (activeTabIndex - 1 + tabs.length) % tabs.length;
 	}
-	while (tabs[activeTabIndex].props.role !== 'server');
+	while (tabs[activeTabIndex].role !== 'server');
 
 	return activeTabIndex;
-}
-
-async function resetAppSettings(): Promise<void> {
-	const resetAppSettingsMessage = 'By proceeding you will be removing all connected organizations and preferences from Zulip.';
-
-	// We save App's settings/configurations in following files
-	const settingFiles = ['config/window-state.json', 'config/domain.json', 'config/settings.json', 'config/certificates.json'];
-
-	const {response} = await dialog.showMessageBox({
-		type: 'warning',
-		buttons: ['YES', 'NO'],
-		defaultId: 0,
-		message: 'Are you sure?',
-		detail: resetAppSettingsMessage
-	});
-	if (response === 0) {
-		settingFiles.forEach(settingFileName => {
-			const getSettingFilesPath = path.join(app.getPath('appData'), appName, settingFileName);
-			fs.access(getSettingFilesPath, (error: NodeJS.ErrnoException) => {
-				if (error) {
-					logger.error('Error while resetting app settings.');
-					logger.error(error);
-				} else {
-					fs.unlink(getSettingFilesPath, () => {
-						sendAction('clear-app-data');
-					});
-				}
-			});
-		});
-	}
 }
 
 export function setMenu(props: MenuProps): void {

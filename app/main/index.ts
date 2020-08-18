@@ -1,23 +1,22 @@
-import {sentryInit} from '../renderer/js/utils/sentry-util';
-import {appUpdater} from './autoupdater';
-import {setAutoLaunch} from './startup';
+
+import electron, {app, dialog, ipcMain, session} from 'electron';
+import fs from 'fs';
+import path from 'path';
 
 import windowStateKeeper from 'electron-window-state';
-import path from 'path';
-import fs from 'fs';
-import electron, {app, dialog, ipcMain, session} from 'electron';
 
-import * as AppMenu from './menu';
 import * as BadgeSettings from '../renderer/js/pages/preference/badge-settings';
 import * as CertificateUtil from '../renderer/js/utils/certificate-util';
 import * as ConfigUtil from '../renderer/js/utils/config-util';
 import * as ProxyUtil from '../renderer/js/utils/proxy-util';
+import {sentryInit} from '../renderer/js/utils/sentry-util';
 
-interface PatchedGlobal extends NodeJS.Global {
-	mainWindowState: windowStateKeeper.State;
-}
+import {appUpdater} from './autoupdater';
+import * as AppMenu from './menu';
+import {_getServerSettings, _saveServerIcon, _isOnline} from './request';
+import {setAutoLaunch} from './startup';
 
-const globalPatched = global as PatchedGlobal;
+let mainWindowState: windowStateKeeper.State;
 
 // Prevent window being garbage collected
 let mainWindow: Electron.BrowserWindow;
@@ -59,9 +58,7 @@ function makeRendererCallback(callback: (...args: any[]) => void): number {
 
 const APP_ICON = path.join(__dirname, '../resources', 'Icon');
 
-const iconPath = (): string => {
-	return APP_ICON + (process.platform === 'win32' ? '.ico' : '.png');
-};
+const iconPath = (): string => APP_ICON + (process.platform === 'win32' ? '.ico' : '.png');
 
 // Toggle the app window
 const toggleApp = (): void => {
@@ -80,9 +77,6 @@ function createMainWindow(): Electron.BrowserWindow {
 		path: `${app.getPath('userData')}/config`
 	});
 
-	// Let's keep the window position global so that we can access it in other process
-	globalPatched.mainWindowState = mainWindowState;
-
 	const win = new electron.BrowserWindow({
 		// This settings needs to be saved in config
 		title: 'Zulip',
@@ -91,7 +85,7 @@ function createMainWindow(): Electron.BrowserWindow {
 		y: mainWindowState.y,
 		width: mainWindowState.width,
 		height: mainWindowState.height,
-		minWidth: 300,
+		minWidth: 500,
 		minHeight: 400,
 		webPreferences: {
 			plugins: true,
@@ -171,6 +165,9 @@ app.on('ready', () => {
 	const ses = session.fromPartition('persist:webviewsession');
 	ses.setUserAgent(`ZulipElectron/${app.getVersion()} ${ses.getUserAgent()}`);
 
+	ipcMain.on('set-spellcheck-langs', () => {
+		ses.setSpellCheckerLanguages(ConfigUtil.getConfigItem('spellcheckerLanguages'));
+	});
 	AppMenu.setMenu({
 		tabs: []
 	});
@@ -209,17 +206,23 @@ app.on('ready', () => {
 		event.returnValue = session.fromPartition('persist:webviewsession').getUserAgent();
 	});
 
-	page.once('did-frame-finish-load', () => {
+	ipcMain.handle('get-server-settings', async (event, domain: string) => _getServerSettings(domain, ses));
+
+	ipcMain.handle('save-server-icon', async (event, url: string) => _saveServerIcon(url, ses));
+
+	ipcMain.handle('is-online', async (event, url: string) => _isOnline(url, ses));
+
+	page.once('did-frame-finish-load', async () => {
 		// Initiate auto-updates on MacOS and Windows
 		if (ConfigUtil.getConfigItem('autoUpdate')) {
-			appUpdater();
+			await appUpdater();
 		}
 	});
 
 	app.on('certificate-error', (
 		event: Event,
 		webContents: Electron.WebContents,
-		url: string,
+		urlString: string,
 		error: string,
 		certificate: Electron.Certificate,
 		callback: (isTrusted: boolean) => void
@@ -227,8 +230,12 @@ app.on('ready', () => {
 		// TODO: The entire concept of selectively ignoring certificate errors
 		// is ill-conceived, and this handler needs to be deleted.
 
-		const {origin} = new URL(url);
-		const filename = CertificateUtil.getCertificate(encodeURIComponent(origin));
+		const url = new URL(urlString);
+		if (url.protocol === 'wss:') {
+			url.protocol = 'https:';
+		}
+
+		const filename = CertificateUtil.getCertificate(encodeURIComponent(url.origin));
 		if (filename !== undefined) {
 			try {
 				const savedCertificate = fs.readFileSync(
@@ -248,7 +255,7 @@ app.on('ready', () => {
 
 		dialog.showErrorBox(
 			'Certificate error',
-			`The server presented an invalid certificate for ${origin}:
+			`The server presented an invalid certificate for ${url.origin}:
 
 ${error}`
 		);
@@ -312,7 +319,7 @@ ${error}`
 	});
 
 	ipcMain.on('clear-app-settings', () => {
-		globalPatched.mainWindowState.unmanage();
+		mainWindowState.unmanage();
 		app.relaunch();
 		app.exit();
 	});
@@ -350,7 +357,7 @@ ${error}`
 		AppMenu.setMenu(props);
 		const activeTab = props.tabs[props.activeTabIndex];
 		if (activeTab) {
-			mainWindow.setTitle(`Zulip - ${activeTab.webview.props.name}`);
+			mainWindow.setTitle(`Zulip - ${activeTab.webviewName}`);
 		}
 	});
 
@@ -362,7 +369,7 @@ ${error}`
 		page.downloadURL(url);
 		page.session.once('will-download', async (_event: Event, item) => {
 			if (ConfigUtil.getConfigItem('promptDownload', false)) {
-				const showDialogOptions: object = {
+				const showDialogOptions: electron.SaveDialogOptions = {
 					defaultPath: path.join(downloadPath, item.getFilename())
 				};
 				item.setSaveDialogOptions(showDialogOptions);

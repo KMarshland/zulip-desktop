@@ -1,20 +1,21 @@
 import {contextBridge, ipcRenderer, webFrame} from 'electron';
 import fs from 'fs';
-import * as SetupSpellChecker from './spellchecker';
 
 import isDev from 'electron-is-dev';
 
+import electron_bridge from './electron-bridge';
+import {loadBots} from './notification/helpers';
 import * as NetworkError from './pages/network';
-
-// eslint-disable-next-line import/no-unassigned-import
-import './notification';
 
 // Prevent drag and drop event in main process which prevents remote code executaion
 // eslint-disable-next-line import/no-unassigned-import
 import './shared/preventdrag';
 
-import electron_bridge from './electron-bridge';
 contextBridge.exposeInMainWorld('raw_electron_bridge', electron_bridge);
+
+electron_bridge.once('zulip-loaded', async () => {
+	await loadBots();
+});
 
 ipcRenderer.on('logout', () => {
 	// Create the menu for the below
@@ -54,13 +55,7 @@ ipcRenderer.on('show-notification-settings', () => {
 	}, 100);
 });
 
-electron_bridge.once('zulip-loaded', ({serverLanguage}) => {
-	// Get the default language of the server
-	if (serverLanguage) {
-		// Init spellchecker
-		SetupSpellChecker.init(serverLanguage);
-	}
-
+electron_bridge.once('zulip-loaded', () => {
 	// Redirect users to network troubleshooting page
 	const getRestartButton = document.querySelector('.restart_get_events_button');
 	if (getRestartButton) {
@@ -68,12 +63,6 @@ electron_bridge.once('zulip-loaded', ({serverLanguage}) => {
 			ipcRenderer.send('forward-message', 'reload-viewer');
 		});
 	}
-});
-
-// Clean up spellchecker events after you navigate away from this page;
-// otherwise, you may experience errors
-window.addEventListener('beforeunload', (): void => {
-	SetupSpellChecker.unsubscribeSpellChecker();
 });
 
 window.addEventListener('load', (event: any): void => {

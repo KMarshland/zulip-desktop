@@ -1,8 +1,8 @@
 import {remote} from 'electron';
-import SendFeedback from '@electron-elements/send-feedback';
-
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
+import SendFeedback from '@electron-elements/send-feedback';
 
 const {app} = remote;
 
@@ -11,48 +11,20 @@ export const sendFeedback: SendFeedback = document.querySelector('send-feedback'
 export const feedbackHolder = sendFeedback.parentElement;
 
 // Make the button color match zulip app's theme
-sendFeedback.customStyles = `
-button:hover, button:focus {
-  border-color: #4EBFAC;
-  color: #4EBFAC;
-}
+sendFeedback.customStylesheet = 'css/feedback.css';
 
-button:active {
-  background-color: #f1f1f1;
-  color: #4EBFAC;
-}
-
-button {
-  background-color: #4EBFAC;
-  border-color: #4EBFAC;
-}
-`;
-
-/* eslint-disable no-multi-str */
-
-// customize the fields of custom elements
+// Customize the fields of custom elements
 sendFeedback.title = 'Report Issue';
 sendFeedback.titleLabel = 'Issue title:';
 sendFeedback.titlePlaceholder = 'Enter issue title';
 sendFeedback.textareaLabel = 'Describe the issue:';
-sendFeedback.textareaPlaceholder = 'Succinctly describe your issue and steps to reproduce it...\n\n\
----\n\
-<!-- Please Include: -->\n\
-- **Operating System**:\n\
-  - [ ] Windows\n\
-  - [ ] Linux/Ubuntu\n\
-  - [ ] macOS\n\
-- **Clear steps to reproduce the issue**:\n\
-- **Relevant error messages and/or screenshots**:\n\
-';
-
-/* eslint-enable no-multi-str */
+sendFeedback.textareaPlaceholder = 'Succinctly describe your issue and steps to reproduce it...';
 
 sendFeedback.buttonLabel = 'Report Issue';
 sendFeedback.loaderSuccessText = '';
 
 sendFeedback.useReporter('emailReporter', {
-	email: 'support@zulipchat.com'
+	email: 'support@zulip.com'
 });
 
 feedbackHolder.addEventListener('click', (event: Event) => {
@@ -67,6 +39,10 @@ sendFeedback.addEventListener('feedback-submitted', () => {
 	setTimeout(() => {
 		feedbackHolder.classList.remove('show');
 	}, 1000);
+});
+
+sendFeedback.addEventListener('feedback-cancelled', () => {
+	feedbackHolder.classList.remove('show');
 });
 
 const dataDir = app.getPath('userData');

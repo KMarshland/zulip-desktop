@@ -1,6 +1,12 @@
+declare module 'electron' {
+	// https://github.com/electron/typescript-definitions/issues/170
+	interface IncomingMessage extends NodeJS.ReadableStream {}
+}
+
 declare module '@electron-elements/send-feedback' {
 	class SendFeedback extends HTMLElement {
 		customStyles: string;
+		customStylesheet: string;
 		titleLabel: string;
 		titlePlaceholder: string;
 		textareaLabel: string;
@@ -8,12 +14,16 @@ declare module '@electron-elements/send-feedback' {
 		buttonLabel: string;
 		loaderSuccessText: string;
 		logs: string[];
-		useReporter: (reporter: string, data: object) => void;
+		useReporter: (reporter: string, data: Record<string, unknown>) => void;
 	}
 	export = SendFeedback;
 }
 
+declare module 'electron-connect';
+
 declare module 'node-mac-notifier';
+
+declare module '@yaireo/tagify';
 
 interface ClipboardDecrypter {
 	version: number;

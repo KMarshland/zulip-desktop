@@ -1,10 +1,12 @@
 import {ipcRenderer, remote} from 'electron';
-
-import path from 'path';
 import fs from 'fs';
+import path from 'path';
+
 import * as ConfigUtil from '../utils/config-util';
 import * as SystemUtil from '../utils/system-util';
+
 import BaseComponent from './base';
+import {contextMenu} from './context-menu';
 import handleExternalLink from './handle-external-link';
 
 const {app, dialog} = remote;
@@ -59,7 +61,11 @@ export default class WebView extends BaseComponent {
 					${this.props.preload ? 'preload="js/preload.js"' : ''}
 					partition="persist:webviewsession"
 					name="${this.props.name}"
-					webpreferences="${this.props.nodeIntegration ? '' : 'contextIsolation, '}javascript=yes">
+					webpreferences="
+						${this.props.nodeIntegration ? '' : 'contextIsolation,'}
+						${ConfigUtil.getConfigItem('enableSpellchecker') ? 'spellcheck,' : ''}
+						javascript
+					">
 				</webview>`;
 	}
 
@@ -143,6 +149,11 @@ export default class WebView extends BaseComponent {
 		});
 
 		this.$el.addEventListener('dom-ready', () => {
+			const webContents = remote.webContents.fromId(this.$el.getWebContentsId());
+			webContents.addListener('context-menu', (event, menuParameters) => {
+				contextMenu(webContents, event, menuParameters);
+			});
+
 			if (this.props.role === 'server') {
 				this.$el.classList.add('onload');
 			}
@@ -236,7 +247,7 @@ export default class WebView extends BaseComponent {
 
 	focus(): void {
 		// Focus Webview and it's contents when Window regain focus.
-		const webContents = this.$el.getWebContents();
+		const webContents = remote.webContents.fromId(this.$el.getWebContentsId());
 		// HACK: webContents.isFocused() seems to be true even without the element
 		// being in focus. So, we check against `document.activeElement`.
 		if (webContents && this.$el !== document.activeElement) {

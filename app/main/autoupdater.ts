@@ -1,20 +1,26 @@
-import {app, dialog} from 'electron';
-import {UpdateDownloadedEvent, UpdateInfo, autoUpdater} from 'electron-updater';
-import {linuxUpdateNotification} from './linuxupdater';	// Required only in case of linux
+import {app, dialog, session} from 'electron';
+import util from 'util';
 
-import log from 'electron-log';
 import isDev from 'electron-is-dev';
+import log from 'electron-log';
+import {UpdateDownloadedEvent, UpdateInfo, autoUpdater} from 'electron-updater';
+
 import * as ConfigUtil from '../renderer/js/utils/config-util';
 import * as LinkUtil from '../renderer/js/utils/link-util';
 
-export function appUpdater(updateFromMenu = false): void {
+import {linuxUpdateNotification} from './linuxupdater';	// Required only in case of linux
+
+const sleep = util.promisify(setTimeout);
+
+export async function appUpdater(updateFromMenu = false): Promise<void> {
 	// Don't initiate auto-updates in development
 	if (isDev) {
 		return;
 	}
 
 	if (process.platform === 'linux' && !process.env.APPIMAGE) {
-		linuxUpdateNotification();
+		const ses = session.fromPartition('persist:webviewsession');
+		await linuxUpdateNotification(ses);
 		return;
 	}
 
@@ -74,11 +80,11 @@ export function appUpdater(updateFromMenu = false): void {
 				type: 'error',
 				buttons: ['Manual Download', 'Cancel'],
 				message: messageText,
-				detail: `Error: ${error.message}\n\nThe latest version of Zulip Desktop is available at -\nhttps://zulipchat.com/apps/.\n
+				detail: `Error: ${error.message}\n\nThe latest version of Zulip Desktop is available at -\nhttps://zulip.com/apps/.\n
 				Current Version: ${app.getVersion()}`
 			});
 			if (response === 0) {
-				await LinkUtil.openBrowser(new URL('https://zulipchat.com/apps/'));
+				await LinkUtil.openBrowser(new URL('https://zulip.com/apps/'));
 			}
 		}
 	});
@@ -94,13 +100,12 @@ export function appUpdater(updateFromMenu = false): void {
 			detail: 'It will be installed the next time you restart the application'
 		});
 		if (response === 0) {
-			setTimeout(() => {
-				autoUpdater.quitAndInstall();
-				// Force app to quit. This is just a workaround, ideally autoUpdater.quitAndInstall() should relaunch the app.
-				app.quit();
-			}, 1000);
+			await sleep(1000);
+			autoUpdater.quitAndInstall();
+			// Force app to quit. This is just a workaround, ideally autoUpdater.quitAndInstall() should relaunch the app.
+			app.quit();
 		}
 	});
 	// Init for updates
-	(async () => autoUpdater.checkForUpdates())();
+	await autoUpdater.checkForUpdates();
 }

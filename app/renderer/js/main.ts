@@ -1,27 +1,29 @@
 import {ipcRenderer, remote, clipboard} from 'electron';
-import {feedbackHolder} from './feedback';
-
 import path from 'path';
-import escape from 'escape-html';
+
 import isDev from 'electron-is-dev';
-const {session, app, Menu, dialog} = remote;
+import escape from 'escape-html';
+
+import * as Messages from '../../resources/messages';
+
+import FunctionalTab from './components/functional-tab';
+import ServerTab from './components/server-tab';
+import WebView from './components/webview';
+import {feedbackHolder} from './feedback';
+import * as CommonUtil from './utils/common-util';
+import * as ConfigUtil from './utils/config-util';
+import * as DNDUtil from './utils/dnd-util';
+import type {DNDSettings} from './utils/dnd-util';
+import * as DomainUtil from './utils/domain-util';
+import * as EnterpriseUtil from './utils/enterprise-util';
+import * as LinkUtil from './utils/link-util';
+import Logger from './utils/logger-util';
+import ReconnectUtil from './utils/reconnect-util';
 
 // eslint-disable-next-line import/no-unassigned-import
 import './tray';
 
-import * as DomainUtil from './utils/domain-util';
-import WebView from './components/webview';
-import ServerTab from './components/server-tab';
-import FunctionalTab from './components/functional-tab';
-import * as ConfigUtil from './utils/config-util';
-import * as DNDUtil from './utils/dnd-util';
-import ReconnectUtil from './utils/reconnect-util';
-import Logger from './utils/logger-util';
-import * as CommonUtil from './utils/common-util';
-import * as EnterpriseUtil from './utils/enterprise-util';
-import * as LinkUtil from './utils/link-util';
-import * as Messages from '../../resources/messages';
-import type {DNDSettings} from './utils/dnd-util';
+const {session, app, Menu, dialog} = remote;
 
 interface FunctionalTabProps {
 	name: string;
@@ -50,6 +52,7 @@ interface SettingsOptions extends DNDSettings {
 	quitOnClose: boolean;
 	promptDownload: boolean;
 	dockBouncing?: boolean;
+	spellcheckerLanguages?: string[];
 }
 
 const logger = new Logger({
@@ -58,7 +61,14 @@ const logger = new Logger({
 });
 
 const rendererDirectory = path.resolve(__dirname, '..');
-export type ServerOrFunctionalTab = ServerTab | FunctionalTab;
+type ServerOrFunctionalTab = ServerTab | FunctionalTab;
+
+export interface TabData {
+	role: string;
+	name: string;
+	index: number;
+	webviewName: string;
+}
 
 class ServerManagerView {
 	$addServerButton: HTMLButtonElement;
@@ -137,6 +147,7 @@ class ServerManagerView {
 		await this.initTabs();
 		this.initActions();
 		this.registerIpcs();
+		ipcRenderer.send('set-spellcheck-langs');
 	}
 
 	async loadProxy(): Promise<void> {
@@ -179,7 +190,7 @@ class ServerManagerView {
 			useSystemProxy: false,
 			showSidebar: true,
 			badgeOption: true,
-			startAtLogin: true,
+			startAtLogin: false,
 			startMinimized: false,
 			enableSpellchecker: true,
 			showNotification: true,
@@ -214,6 +225,7 @@ class ServerManagerView {
 
 		if (process.platform !== 'darwin') {
 			settingOptions.autoHideMenubar = false;
+			settingOptions.spellcheckerLanguages = ['en-US'];
 		}
 
 		for (const [setting, value] of Object.entries(settingOptions)) {
@@ -362,9 +374,7 @@ class ServerManagerView {
 				name: CommonUtil.decodeString(server.alias),
 				hasPermission: (origin: string, permission: string) =>
 					origin === server.url && permission === 'notifications',
-				isActive: () => {
-					return index === this.activeTabIndex;
-				},
+				isActive: () => index === this.activeTabIndex,
 				switchLoading: (loading: boolean, url: string) => {
 					if (loading) {
 						this.loading.add(url);
@@ -529,9 +539,7 @@ class ServerManagerView {
 				url: tabProps.url,
 				role: 'function',
 				name: tabProps.name,
-				isActive: () => {
-					return this.functionalTabs.get(tabProps.name) === this.activeTabIndex;
-				},
+				isActive: () => this.functionalTabs.get(tabProps.name) === this.activeTabIndex,
 				switchLoading: (loading: boolean, url: string) => {
 					if (loading) {
 						this.loading.add(url);
@@ -591,19 +599,13 @@ class ServerManagerView {
 	// not crash app when this.tabs is passed into
 	// ipcRenderer. Something about webview, and props.webview
 	// properties in ServerTab causes the app to crash.
-	get tabsForIpc(): ServerOrFunctionalTab[] {
-		const tabs: ServerOrFunctionalTab[] = [];
-		this.tabs.forEach((tab: ServerOrFunctionalTab) => {
-			const proto = Object.create(Object.getPrototypeOf(tab));
-			const tabClone = Object.assign(proto, tab);
-
-			tabClone.webview = {props: {}};
-			tabClone.webview.props.name = tab.webview.props.name;
-			delete tabClone.props.webview;
-			tabs.push(tabClone);
-		});
-
-		return tabs;
+	get tabsForIpc(): TabData[] {
+		return this.tabs.map(tab => ({
+			role: tab.props.role,
+			name: tab.props.name,
+			index: tab.props.index,
+			webviewName: tab.webview.props.name
+		}));
 	}
 
 	activateTab(index: number, hideOldTab = true): void {
@@ -628,7 +630,7 @@ class ServerManagerView {
 
 		try {
 			this.tabs[index].webview.canGoBackButton();
-		} catch (_) {
+		} catch {
 		}
 
 		this.activeTabIndex = index;
@@ -721,7 +723,7 @@ class ServerManagerView {
 
 	updateGeneralSettings(setting: string, value: unknown): void {
 		if (this.getActiveWebview()) {
-			const webContents = this.getActiveWebview().getWebContents();
+			const webContents = remote.webContents.fromId(this.getActiveWebview().getWebContentsId());
 			webContents.send(setting, value);
 		}
 	}
@@ -833,7 +835,7 @@ class ServerManagerView {
 					({webview}) =>
 						!webview.loading &&
 						webview.$el.getWebContentsId() === webContentsId &&
-					webview.props.hasPermission?.(origin, permission)
+						webview.props.hasPermission?.(origin, permission)
 				);
 			console.log(
 				grant ? 'Granted' : 'Denied', 'permissions request for',
@@ -854,7 +856,7 @@ class ServerManagerView {
 
 		ipcRenderer.on('open-help', async () => {
 			// Open help page of current active server
-			await LinkUtil.openBrowser(new URL('https://zulipchat.com/help/'));
+			await LinkUtil.openBrowser(new URL('https://zulip.com/help/'));
 		});
 
 		ipcRenderer.on('reload-viewer', this.reloadView.bind(this, this.tabs[this.activeTabIndex].props.index));
@@ -863,10 +865,6 @@ class ServerManagerView {
 
 		ipcRenderer.on('hard-reload', () => {
 			ipcRenderer.send('reload-full-app');
-		});
-
-		ipcRenderer.on('clear-app-data', () => {
-			ipcRenderer.send('clear-app-settings');
 		});
 
 		ipcRenderer.on('switch-server-tab', (event: Event, index: number) => {
@@ -901,7 +899,7 @@ class ServerManagerView {
 			webviews.forEach(webview => {
 				try {
 					webview.setAudioMuted(state);
-				} catch (_) {
+				} catch {
 					// Webview is not ready yet
 					webview.addEventListener('dom-ready', () => {
 						webview.setAudioMuted(state);
@@ -925,7 +923,7 @@ class ServerManagerView {
 		ipcRenderer.on('toggle-dnd', (event: Event, state: boolean, newSettings: DNDSettings) => {
 			this.toggleDNDButton(state);
 			ipcRenderer.send('forward-message', 'toggle-silent', newSettings.silent);
-			const webContents = this.getActiveWebview().getWebContents();
+			const webContents = remote.webContents.fromId(this.getActiveWebview().getWebContentsId());
 			webContents.send('toggle-dnd', state, newSettings);
 		});
 
@@ -977,7 +975,7 @@ class ServerManagerView {
 		ipcRenderer.on('focus-webview-with-id', (event: Event, webviewId: number) => {
 			const webviews: NodeListOf<Electron.WebviewTag> = document.querySelectorAll('webview');
 			webviews.forEach(webview => {
-				const currentId = webview.getWebContents().id;
+				const currentId = webview.getWebContentsId();
 				const tabId = webview.getAttribute('data-tab-id');
 				const concurrentTab: HTMLButtonElement = document.querySelector(`div[data-tab-id="${tabId}"]`);
 				if (currentId === webviewId) {
@@ -1030,13 +1028,9 @@ class ServerManagerView {
 		});
 
 		// Redo and undo functionality since the default API doesn't work on macOS
-		ipcRenderer.on('undo', () => {
-			return this.getActiveWebview().undo();
-		});
+		ipcRenderer.on('undo', () => this.getActiveWebview().undo());
 
-		ipcRenderer.on('redo', () => {
-			return this.getActiveWebview().redo();
-		});
+		ipcRenderer.on('redo', () => this.getActiveWebview().redo());
 
 		ipcRenderer.on('set-active', async () => {
 			const webviews: NodeListOf<Electron.WebviewTag> = document.querySelectorAll('webview');
@@ -1058,11 +1052,12 @@ window.addEventListener('load', async () => {
 	// Only start electron-connect (auto reload on change) when its ran
 	// from `npm run dev` or `gulp dev` and not from `npm start`
 	if (isDev && remote.getGlobal('process').argv.includes('--electron-connect')) {
-		require('electron-connect').client.create();
+		// eslint-disable-next-line node/no-unsupported-features/es-syntax
+		(await import('electron-connect')).client.create();
 	}
 
 	const serverManagerView = new ServerManagerView();
 	await serverManagerView.init();
 });
 
-export {};
+export { };

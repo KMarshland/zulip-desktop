@@ -1,8 +1,8 @@
 import {remote} from 'electron';
-import electron_bridge from '../electron-bridge';
-import {appId, loadBots} from './helpers';
 
 import DefaultNotification from './default-notification';
+import {appId} from './helpers';
+
 const {app} = remote;
 
 // From https://github.com/felixrieseberg/electron-windows-notifications#appusermodelid
@@ -67,7 +67,3 @@ export function newNotification(
 		actions: notification.actions
 	};
 }
-
-electron_bridge.once('zulip-loaded', async () => {
-	await loadBots();
-});

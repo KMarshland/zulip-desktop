@@ -1,11 +1,12 @@
 import {Console} from 'console'; // eslint-disable-line node/prefer-global/console
-import {initSetUp} from './default-util';
-import {sentryInit, captureException} from './sentry-util';
-
+import electron from 'electron';
 import fs from 'fs';
 import os from 'os';
+
 import isDev from 'electron-is-dev';
-import electron from 'electron';
+
+import {initSetUp} from './default-util';
+import {sentryInit, captureException} from './sentry-util';
 
 interface LoggerOptions {
 	timestamp?: true | (() => string);
@@ -89,20 +90,21 @@ export default class Logger {
 			nodeConsole, timestamp, level, logInDevMode
 		} = this;
 
-		/* eslint-disable no-fallthrough */
 		switch (true) {
 			case typeof timestamp === 'function':
 				args.unshift(timestamp() + ' |\t');
+				// Fall through
 
 			case (level):
 				args.unshift(type.toUpperCase() + ' |');
+				// Fall through
 
 			case isDev || logInDevMode:
 				nodeConsole[type](...args);
+				break;
 
-			default: break;
+			default:
 		}
-		/* eslint-enable no-fallthrough */
 
 		console[type](...args);
 	}

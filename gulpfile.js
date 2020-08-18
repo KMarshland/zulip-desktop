@@ -1,16 +1,16 @@
 'use strict';
-const gulp = require('gulp');
+const {execSync} = require('child_process');
+
 const electron = require('electron-connect').server.create({
 	verbose: true
 });
-const tape = require('gulp-tape');
-const tapColorize = require('tap-colorize');
-const ts = require('gulp-typescript');
-const tsProject = ts.createProject('tsconfig.json');
-
 const glob = require('glob');
-const {execSync} = require('child_process');
+const gulp = require('gulp');
+const tape = require('gulp-tape');
+const ts = require('gulp-typescript');
+const tapColorize = require('tap-colorize');
 
+const tsProject = ts.createProject('tsconfig.json');
 const baseFilePattern = 'app/+(main|renderer)/**/*';
 const globOptions = {cwd: __dirname};
 const jsFiles = glob.sync(baseFilePattern + '.js', globOptions);
@@ -21,11 +21,9 @@ if (jsFiles.length !== tsFiles.length) {
 	execSync(`${npx} tsc`);
 }
 
-gulp.task('compile', () => {
-	return tsProject.src()
-		.pipe(tsProject())
-		.js.pipe(gulp.dest('app'));
-});
+gulp.task('compile', () => tsProject.src()
+	.pipe(tsProject())
+	.js.pipe(gulp.dest('app')));
 
 gulp.task('dev', () => {
 	// Start browser process
@@ -50,11 +48,9 @@ gulp.task('reload:renderer', done => {
 	done();
 });
 
-gulp.task('test-e2e', () => {
-	return gulp.src('tests/*.js')
-		.pipe(tape({
-			reporter: tapColorize()
-		}));
-});
+gulp.task('test-e2e', () => gulp.src('tests/*.js')
+	.pipe(tape({
+		reporter: tapColorize()
+	})));
 
 gulp.task('default', gulp.parallel('dev', 'test-e2e'));

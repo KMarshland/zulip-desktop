@@ -2,6 +2,65 @@
 
 All notable changes to the Zulip desktop app are documented in this file.
 
+### v5.4.2 --2020-08-12
+
+**Potential Fixes**:
+* macOS: Electron 9 upgrade is a potential fix for the ['grey screen issue'](https://chat.zulip.org/#narrow/stream/9-issues/topic/Grey.20Window.20on.20macOS) reported.
+
+**Dependencies**:
+* Upgrade all dependencies, including Electron 9.2.0.
+
+### v5.4.1-beta --2020-07-29
+
+**Fixes**:
+* Resized the large application icon on macOS dock to be coherent with other icons.
+
+**Potential Fixes**:
+* macOS: Electron 9 upgrade is a potential fix for the ['grey screen issue'](https://chat.zulip.org/#narrow/stream/9-issues/topic/Grey.20Window.20on.20macOS) reported.
+
+**Dependencies**:
+* Upgrade all dependencies, including Electron 9.1.1.
+
+### v5.4.0 --2020-07-21
+
+**New features**:
+* Added support for certificates from system store.
+* Added support for Slovak as application language.
+
+**Fixes**:
+* Fix bug in *Copy Link* and add *Copy Email* option in context menu.
+* Enable *Copy* option in context menu only when copying is possible.
+* Remove leading and trailing separators in context menu on non-mac systems.
+* ignoreCerts: Accommodate WebSocket URLs in certificate-error handler.
+
+**Dependencies**:
+* Upgrade all dependencies, including Electron 8.4.0.
+
+**Deprecations**:
+* This release supports certificates from Zulip store as well as system store. Zulip certificate store will be deprecated in the next release.
+Users are hereby requested to move to system store. For more information, please see the [documentation](https://zulip.com/help/custom-certificates).
+
+### v5.3.0 --2020-06-24
+
+**Security fixes**:
+* Remove the insecure ignoreCerts option.
+
+**Fixes**:
+* Windows: Turn off start at login by default.
+* Fix zoom issues where some webviews would not get zoomed-out once zoomed-in.
+* Fix overflowing contents on 'Add Organization' view.
+
+**New features**:
+* Add a cancel button in the report-issue modal.
+* macOS: Use electron API to get dark tray icon instead of the green icon for the light theme.
+* Remove 'Reset App Data' option. Factory Reset option has been moved to Settings → General.
+* Support pkg installer on macOS.
+* Use electron 8 built-in spellchecker. Linux and Windows users can now choose upto three spellchecker languages from Settings → General. On macOS, default spellchecker is used.
+* Setup Transifex for better synchronization of translations. The application now supports 41 languages instead of 21.
+
+**Dependencies**:
+* Upgrade all dependencies, including Electron 8.3.3.
+
 ### v5.2.0 --2020-05-04
 
 **Security fixes**:
