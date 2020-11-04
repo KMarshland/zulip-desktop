@@ -2,7 +2,6 @@ import {ipcRenderer, remote, clipboard} from 'electron';
 import path from 'path';
 
 import isDev from 'electron-is-dev';
-import escape from 'escape-html';
 
 import * as Messages from '../../resources/messages';
 
@@ -10,7 +9,6 @@ import FunctionalTab from './components/functional-tab';
 import ServerTab from './components/server-tab';
 import WebView from './components/webview';
 import {feedbackHolder} from './feedback';
-import * as CommonUtil from './utils/common-util';
 import * as ConfigUtil from './utils/config-util';
 import * as DNDUtil from './utils/dnd-util';
 import type {DNDSettings} from './utils/dnd-util';
@@ -125,7 +123,7 @@ class ServerManagerView {
 
 		this.$fullscreenPopup = document.querySelector('#fullscreen-popup');
 		this.$fullscreenEscapeKey = process.platform === 'darwin' ? '^⌘F' : 'F11';
-		this.$fullscreenPopup.innerHTML = `Press ${this.$fullscreenEscapeKey} to exit full screen`;
+		this.$fullscreenPopup.textContent = `Press ${this.$fullscreenEscapeKey} to exit full screen`;
 
 		this.loading = new Set();
 		this.activeTabIndex = -1;
@@ -163,19 +161,15 @@ class ServerManagerView {
 		}
 
 		const proxyEnabled = ConfigUtil.getConfigItem('useManualProxy') || ConfigUtil.getConfigItem('useSystemProxy');
-		if (proxyEnabled) {
-			await session.fromPartition('persist:webviewsession').setProxy({
-				pacScript: ConfigUtil.getConfigItem('proxyPAC', ''),
-				proxyRules: ConfigUtil.getConfigItem('proxyRules', ''),
-				proxyBypassRules: ConfigUtil.getConfigItem('proxyBypass', '')
-			});
-		} else {
-			await session.fromPartition('persist:webviewsession').setProxy({
-				pacScript: '',
-				proxyRules: '',
-				proxyBypassRules: ''
-			});
-		}
+		await session.fromPartition('persist:webviewsession').setProxy(proxyEnabled ? {
+			pacScript: ConfigUtil.getConfigItem('proxyPAC', ''),
+			proxyRules: ConfigUtil.getConfigItem('proxyRules', ''),
+			proxyBypassRules: ConfigUtil.getConfigItem('proxyBypass', '')
+		} : {
+			pacScript: '',
+			proxyRules: '',
+			proxyBypassRules: ''
+		});
 	}
 
 	// Settings are initialized only when user clicks on General/Server/Network section settings
@@ -257,7 +251,7 @@ class ServerManagerView {
 			const serverConf = await DomainUtil.checkDomain(domain);
 			await DomainUtil.addDomain(serverConf);
 			return true;
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error(error);
 			logger.error(`Could not add ${domain}. Please contact your system administrator.`);
 			return false;
@@ -358,7 +352,7 @@ class ServerManagerView {
 		this.tabs.push(new ServerTab({
 			role: 'server',
 			icon: server.icon,
-			name: CommonUtil.decodeString(server.alias),
+			name: server.alias,
 			$root: this.$tabsContainer,
 			onClick: this.activateLastTab.bind(this, index),
 			index,
@@ -371,7 +365,7 @@ class ServerManagerView {
 				tabIndex,
 				url: server.url,
 				role: 'server',
-				name: CommonUtil.decodeString(server.alias),
+				name: server.alias,
 				hasPermission: (origin: string, permission: string) =>
 					origin === server.url && permission === 'notifications',
 				isActive: () => index === this.activeTabIndex,
@@ -463,7 +457,7 @@ class ServerManagerView {
 		const $parent = $img.parentElement;
 		const $container = $parent.parentElement;
 		const webviewId = $container.dataset.tabId;
-		const $webview = document.querySelector(`webview[data-tab-id="${webviewId}"]`);
+		const $webview = document.querySelector(`webview[data-tab-id="${CSS.escape(webviewId)}"]`);
 		const realmName = $webview.getAttribute('name');
 
 		if (realmName === null) {
@@ -499,7 +493,7 @@ class ServerManagerView {
 	}
 
 	onHover(index: number): void {
-		// `this.$serverIconTooltip[index].innerHTML` already has realm name, so we are just
+		// `this.$serverIconTooltip[index].textContent` already has realm name, so we are just
 		// removing the style.
 		this.$serverIconTooltip[index].removeAttribute('style');
 		// To handle position of servers' tooltip due to scrolling of list of organizations
@@ -684,8 +678,8 @@ class ServerManagerView {
 		this.functionalTabs.clear();
 
 		// Clear DOM elements
-		this.$tabsContainer.innerHTML = '';
-		this.$webviewsContainer.innerHTML = '';
+		this.$tabsContainer.textContent = '';
+		this.$webviewsContainer.textContent = '';
 	}
 
 	async reloadView(): Promise<void> {
@@ -932,11 +926,11 @@ class ServerManagerView {
 				if (domain.url.includes(serverURL)) {
 					const serverTooltipSelector = '.tab .server-tooltip';
 					const serverTooltips = document.querySelectorAll(serverTooltipSelector);
-					serverTooltips[index].innerHTML = escape(realmName);
-					this.tabs[index].props.name = escape(realmName);
+					serverTooltips[index].textContent = realmName;
+					this.tabs[index].props.name = realmName;
 					this.tabs[index].webview.props.name = realmName;
 
-					domain.alias = escape(realmName);
+					domain.alias = realmName;
 					DomainUtil.updateDomain(index, domain);
 					// Update the realm name also on the Window menu
 					ipcRenderer.send('update-menu', {
@@ -977,7 +971,7 @@ class ServerManagerView {
 			webviews.forEach(webview => {
 				const currentId = webview.getWebContentsId();
 				const tabId = webview.getAttribute('data-tab-id');
-				const concurrentTab: HTMLButtonElement = document.querySelector(`div[data-tab-id="${tabId}"]`);
+				const concurrentTab: HTMLButtonElement = document.querySelector(`div[data-tab-id="${CSS.escape(tabId)}"]`);
 				if (currentId === webviewId) {
 					concurrentTab.click();
 				}

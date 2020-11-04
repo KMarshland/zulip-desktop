@@ -4,7 +4,6 @@ import path from 'path';
 import stream from 'stream';
 import util from 'util';
 
-import escape from 'escape-html';
 import getStream from 'get-stream';
 
 import {ServerConf} from '../renderer/js/utils/domain-util';
@@ -73,7 +72,7 @@ export const _getServerSettings = async (domain: string, session: Electron.sessi
 		// Following check handles both the cases
 		icon: realm_icon.startsWith('/') ? realm_uri + realm_icon : realm_icon,
 		url: realm_uri,
-		alias: escape(realm_name)
+		alias: realm_name
 	};
 };
 
@@ -88,7 +87,7 @@ export const _saveServerIcon = async (url: string, session: Electron.session): P
 		const filePath = generateFilePath(url);
 		await pipeline(response, fs.createWriteStream(filePath));
 		return filePath;
-	} catch (error) {
+	} catch (error: unknown) {
 		logger.log('Could not get server icon.');
 		logger.log(error);
 		logger.reportSentry(error);
@@ -106,7 +105,7 @@ export const _isOnline = async (url: string, session: Electron.session): Promise
 		}));
 		const isValidResponse = response.statusCode >= 200 && response.statusCode < 400;
 		return isValidResponse;
-	} catch (error) {
+	} catch (error: unknown) {
 		logger.log(error);
 		return false;
 	}

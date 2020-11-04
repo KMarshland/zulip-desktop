@@ -1,3 +1,5 @@
+import {htmlEscape} from 'escape-goat';
+
 import BaseComponent from '../../components/base';
 import * as t from '../../utils/translation-util';
 
@@ -17,29 +19,29 @@ export default class PreferenceNav extends BaseComponent {
 		this.init();
 	}
 
-	template(): string {
-		let navItemsTemplate = '';
+	templateHTML(): string {
+		let navItemsHTML = '';
 		for (const navItem of this.navItems) {
-			navItemsTemplate += `<div class="nav" id="nav-${navItem}">${t.__(navItem)}</div>`;
+			navItemsHTML += htmlEscape`<div class="nav" id="nav-${navItem}">${t.__(navItem)}</div>`;
 		}
 
-		return `
+		return htmlEscape`
 			<div>
 				<div id="settings-header">${t.__('Settings')}</div>
-				<div id="nav-container">${navItemsTemplate}</div>
+				<div id="nav-container">` + navItemsHTML + htmlEscape`</div>
 			</div>
 		`;
 	}
 
 	init(): void {
-		this.$el = this.generateNodeFromTemplate(this.template());
+		this.$el = this.generateNodeFromHTML(this.templateHTML());
 		this.props.$root.append(this.$el);
 		this.registerListeners();
 	}
 
 	registerListeners(): void {
 		for (const navItem of this.navItems) {
-			const $item = document.querySelector(`#nav-${navItem}`);
+			const $item = document.querySelector(`#nav-${CSS.escape(navItem)}`);
 			$item.addEventListener('click', () => {
 				this.props.onItemSelected(navItem);
 			});
@@ -57,12 +59,12 @@ export default class PreferenceNav extends BaseComponent {
 	}
 
 	activate(navItem: string): void {
-		const $item = document.querySelector(`#nav-${navItem}`);
+		const $item = document.querySelector(`#nav-${CSS.escape(navItem)}`);
 		$item.classList.add('active');
 	}
 
 	deactivate(navItem: string): void {
-		const $item = document.querySelector(`#nav-${navItem}`);
+		const $item = document.querySelector(`#nav-${CSS.escape(navItem)}`);
 		$item.classList.remove('active');
 	}
 }

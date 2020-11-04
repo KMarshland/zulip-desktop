@@ -6,7 +6,6 @@ import path from 'path';
 import windowStateKeeper from 'electron-window-state';
 
 import * as BadgeSettings from '../renderer/js/pages/preference/badge-settings';
-import * as CertificateUtil from '../renderer/js/utils/certificate-util';
 import * as ConfigUtil from '../renderer/js/utils/config-util';
 import * as ProxyUtil from '../renderer/js/utils/proxy-util';
 import {sentryInit} from '../renderer/js/utils/sentry-util';
@@ -71,7 +70,7 @@ const toggleApp = (): void => {
 
 function createMainWindow(): Electron.BrowserWindow {
 	// Load the previous state with fallback to defaults
-	const mainWindowState: windowStateKeeper.State = windowStateKeeper({
+	mainWindowState = windowStateKeeper({
 		defaultWidth: 1100,
 		defaultHeight: 720,
 		path: `${app.getPath('userData')}/config`
@@ -88,7 +87,7 @@ function createMainWindow(): Electron.BrowserWindow {
 		minWidth: 500,
 		minHeight: 400,
 		webPreferences: {
-			plugins: true,
+			enableRemoteModule: true,
 			nodeIntegration: true,
 			partition: 'persist:webviewsession',
 			webviewTag: true
@@ -223,36 +222,9 @@ app.on('ready', () => {
 		event: Event,
 		webContents: Electron.WebContents,
 		urlString: string,
-		error: string,
-		certificate: Electron.Certificate,
-		callback: (isTrusted: boolean) => void
-	) /* eslint-disable-line max-params */ => {
-		// TODO: The entire concept of selectively ignoring certificate errors
-		// is ill-conceived, and this handler needs to be deleted.
-
+		error: string
+	) => {
 		const url = new URL(urlString);
-		if (url.protocol === 'wss:') {
-			url.protocol = 'https:';
-		}
-
-		const filename = CertificateUtil.getCertificate(encodeURIComponent(url.origin));
-		if (filename !== undefined) {
-			try {
-				const savedCertificate = fs.readFileSync(
-					path.join(`${app.getPath('userData')}/certificates`, filename),
-					'utf8'
-				);
-				if (certificate.data.replace(/[\r\n]/g, '') ===
-					savedCertificate.replace(/[\r\n]/g, '')) {
-					event.preventDefault();
-					callback(true);
-					return;
-				}
-			} catch (error) {
-				console.error(`Error reading certificate file ${filename}:`, error);
-			}
-		}
-
 		dialog.showErrorBox(
 			'Certificate error',
 			`The server presented an invalid certificate for ${url.origin}:
@@ -285,32 +257,6 @@ ${error}`
 	ipcMain.on('quit-app', () => {
 		app.quit();
 	});
-
-	// Code to show pdf in a new BrowserWindow (currently commented out due to bug-upstream)
-	// ipcMain.on('pdf-view', (event, url) => {
-	// 	// Paddings for pdfWindow so that it fits into the main browserWindow
-	// 	const paddingWidth = 55;
-	// 	const paddingHeight = 22;
-
-	// 	// Get the config of main browserWindow
-	// 	const mainWindowState = global.mainWindowState;
-
-	// 	// Window to view the pdf file
-	// 	const pdfWindow = new electron.BrowserWindow({
-	// 		x: mainWindowState.x + paddingWidth,
-	// 		y: mainWindowState.y + paddingHeight,
-	// 		width: mainWindowState.width - paddingWidth,
-	// 		height: mainWindowState.height - paddingHeight,
-	// 		webPreferences: {
-	// 			plugins: true,
-	// 			partition: 'persist:webviewsession'
-	// 		}
-	// 	});
-	// 	pdfWindow.loadURL(url);
-
-	// 	// We don't want to have the menu bar in pdf window
-	// 	pdfWindow.setMenu(null);
-	// });
 
 	// Reload full app not just webview, useful in debugging
 	ipcMain.on('reload-full-app', () => {
