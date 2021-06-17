@@ -308,7 +308,7 @@ ${error}`,
   });
 
   ipcMain.on("toggle-badge-option", () => {
-    BadgeSettings.updateBadge(badgeCount, mainWindow);
+    BadgeSettings.updateBadge(badgeCount, false, mainWindow);
   });
 
   ipcMain.on(
@@ -322,9 +322,9 @@ ${error}`,
 
   ipcMain.on(
     "update-badge",
-    (_event: Electron.IpcMainEvent, messageCount: number) => {
+    (_event: Electron.IpcMainEvent, messageCount: number, hasUnreads: boolean) => {
       badgeCount = messageCount;
-      BadgeSettings.updateBadge(badgeCount, mainWindow);
+      BadgeSettings.updateBadge(badgeCount, hasUnreads, mainWindow);
       send(page, "tray", messageCount);
     },
   );

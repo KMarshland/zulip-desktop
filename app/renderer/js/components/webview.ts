@@ -36,6 +36,7 @@ export default class WebView {
   props: WebViewProps;
   zoomFactor: number;
   badgeCount: number;
+  hasUnreads: boolean;
   loading: boolean;
   customCSS: string | false | null;
   $webviewsContainer: DOMTokenList;
@@ -47,6 +48,7 @@ export default class WebView {
     this.zoomFactor = 1;
     this.loading = true;
     this.badgeCount = 0;
+    this.hasUnreads = false;
     this.customCSS = ConfigUtil.getConfigItem("customCSS", null);
     this.$webviewsContainer = document.querySelector(
       "#webviews-container",
@@ -102,10 +104,38 @@ export default class WebView {
       });
     }
 
+    let executed = false;
     this.$el!.addEventListener("page-title-updated", (event) => {
       const {title} = event;
       this.badgeCount = this.getBadgeCount(title);
+      this.hasUnreads = this.getHasUnreads(title);
       this.props.onTitleChange();
+
+      if (!executed && this.$el) {
+        executed = true;
+        this.$el.executeJavaScript('(' + (function () {
+          // @ts-ignore
+          if (!window.pollUnreads) {
+            // @ts-ignore
+            window.pollUnreads = function () {
+              // @ts-ignore
+              const unreadCount = parseInt(document.querySelector('a[href="#all_messages"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const mentionCount = parseInt(document.querySelector('a[href="#narrow/is/mentioned"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const pmCount = parseInt(document.querySelector('a[href="#narrow/is/private"] .unread_count').innerText) || 0;
+
+              document.title = `COUNTS-[${unreadCount}]-(${mentionCount + pmCount})`;
+
+              // @ts-ignore
+              requestAnimationFrame(window.pollUnreads);
+            }
+
+            // @ts-ignore
+            requestAnimationFrame(window.pollUnreads);
+          }
+        }).toString() + ')();');
+      }
     });
 
     this.$el!.addEventListener("did-navigate-in-page", (event) => {
@@ -184,6 +214,10 @@ export default class WebView {
     this.$el!.addEventListener("did-stop-loading", () => {
       this.props.switchLoading(false, this.props.url);
     });
+  }
+
+  getHasUnreads(title: string): boolean {
+    return !title.includes('[0]');
   }
 
   getBadgeCount(title: string): number {

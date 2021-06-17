@@ -20,7 +20,7 @@ export interface MainMessage {
   "toggle-menubar": (showMenubar: boolean) => void;
   toggleAutoLauncher: (AutoLaunchValue: boolean) => void;
   "unread-count": (unreadCount: number) => void;
-  "update-badge": (messageCount: number) => void;
+  "update-badge": (messageCount: number, hasUnreads: boolean) => void;
   "update-menu": (props: MenuProps) => void;
   "update-taskbar-icon": (data: string, text: string) => void;
 }

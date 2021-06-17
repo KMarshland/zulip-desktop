@@ -762,15 +762,18 @@ class ServerManagerView {
 
   updateBadge(): void {
     let messageCountAll = 0;
+    let hasUnreads = false;
+
     for (const tab of this.tabs) {
       if (tab && tab instanceof ServerTab && tab.updateBadge) {
         const count = tab.webview.badgeCount;
+        hasUnreads = hasUnreads || tab.webview.hasUnreads;
         messageCountAll += count;
         tab.updateBadge(count);
       }
     }
 
-    ipcRenderer.send("update-badge", messageCountAll);
+    ipcRenderer.send("update-badge", messageCountAll, hasUnreads);
   }
 
   updateGeneralSettings<Channel extends keyof RendererMessage>(

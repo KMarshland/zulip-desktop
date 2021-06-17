@@ -6,12 +6,17 @@ import {send} from "./typed-ipc-main";
 
 function showBadgeCount(
   messageCount: number,
+  hasUnreads: boolean,
   mainWindow: electron.BrowserWindow,
 ): void {
   if (process.platform === "win32") {
     updateOverlayIcon(messageCount, mainWindow);
   } else {
-    app.badgeCount = messageCount;
+    if (messageCount > 0 || !hasUnreads) {
+      app.badgeCount = messageCount;
+    } else {
+      app.dock.setBadge('•');
+    }
   }
 }
 
@@ -25,10 +30,11 @@ function hideBadgeCount(mainWindow: electron.BrowserWindow): void {
 
 export function updateBadge(
   badgeCount: number,
+  hasUnreads: boolean,
   mainWindow: electron.BrowserWindow,
 ): void {
   if (ConfigUtil.getConfigItem("badgeOption", true)) {
-    showBadgeCount(badgeCount, mainWindow);
+    showBadgeCount(badgeCount, hasUnreads, mainWindow);
   } else {
     hideBadgeCount(mainWindow);
   }
