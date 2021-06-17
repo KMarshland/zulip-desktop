@@ -6,11 +6,19 @@ import * as ConfigUtil from "../common/config-util.js";
 
 import {send} from "./typed-ipc-main.js";
 
-function showBadgeCount(messageCount: number, mainWindow: BrowserWindow): void {
+function showBadgeCount(
+  messageCount: number,
+  hasUnreads: boolean,
+  mainWindow: BrowserWindow,
+): void {
   if (process.platform === "win32") {
     updateOverlayIcon(messageCount, mainWindow);
   } else {
-    app.badgeCount = messageCount;
+    if (messageCount > 0 || !hasUnreads) {
+      app.badgeCount = messageCount;
+    } else {
+      app.dock.setBadge('•');
+    }
   }
 }
 
@@ -24,10 +32,11 @@ function hideBadgeCount(mainWindow: BrowserWindow): void {
 
 export function updateBadge(
   badgeCount: number,
+  hasUnreads: boolean,
   mainWindow: BrowserWindow,
 ): void {
   if (ConfigUtil.getConfigItem("badgeOption", true)) {
-    showBadgeCount(badgeCount, mainWindow);
+    showBadgeCount(badgeCount, hasUnreads, mainWindow);
   } else {
     hideBadgeCount(mainWindow);
   }

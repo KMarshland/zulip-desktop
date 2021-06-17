@@ -104,6 +104,7 @@ export default class WebView {
   }
 
   badgeCount = 0;
+  hasUnreads: boolean;
   loading = true;
   private customCss: string | false | null;
   private readonly $webviewsContainer: DOMTokenList;
@@ -118,6 +119,7 @@ export default class WebView {
     private readonly $webview: HTMLElement,
     readonly webContentsId: number,
   ) {
+    this.hasUnreads = false;
     this.customCss = ConfigUtil.getConfigItem("customCSS", null);
     this.$webviewsContainer = document.querySelector(
       "#webviews-container",
@@ -139,6 +141,15 @@ export default class WebView {
 
   getWebContents(): WebContents {
     return remote.webContents.fromId(this.webContentsId)!;
+  }
+
+  getHasUnreads(title: string): boolean {
+    return !title.includes('[0]');
+  }
+
+  getBadgeCount(title: string): number {
+    const messageCountInTitle = /^\((\d+)\)/.exec(title);
+    return messageCountInTitle ? Number(messageCountInTitle[1]) : 0;
   }
 
   showNotificationSettings(): void {
@@ -243,6 +254,38 @@ export default class WebView {
 
     this.$webview.addEventListener("did-navigate", () => {
       this.canGoBackButton();
+    });
+
+    let executed = false;
+    webContents.on("page-title-updated", (_event, title) => {
+      this.badgeCount = this.getBadgeCount(title);
+      this.hasUnreads = this.getHasUnreads(title);
+
+      if (!executed && this.$webview) {
+        executed = true;
+        webContents.executeJavaScript('(' + (function () {
+          // @ts-ignore
+          if (!window.pollUnreads) {
+            // @ts-ignore
+            window.pollUnreads = function () {
+              // @ts-ignore
+              const unreadCount = parseInt(document.querySelector('a[href="#all_messages"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const mentionCount = parseInt(document.querySelector('a[href="#narrow/is/mentioned"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const pmCount = parseInt(document.querySelector('a[href="#narrow/is/private"] .unread_count').innerText) || 0;
+
+              document.title = `COUNTS-[${unreadCount}]-(${mentionCount + pmCount})`;
+
+              // @ts-ignore
+              requestAnimationFrame(window.pollUnreads);
+            }
+
+            // @ts-ignore
+            requestAnimationFrame(window.pollUnreads);
+          }
+        }).toString() + ')();');
+      }
     });
 
     webContents.on("page-favicon-updated", (_event, favicons) => {

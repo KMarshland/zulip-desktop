@@ -381,7 +381,7 @@ function createMainWindow(): BrowserWindow {
   });
 
   ipcMain.on("toggle-badge-option", () => {
-    BadgeSettings.updateBadge(badgeCount, mainWindow);
+    BadgeSettings.updateBadge(badgeCount, false, mainWindow);
   });
 
   ipcMain.on("toggle-menubar", (_event, showMenubar: boolean) => {
@@ -390,11 +390,14 @@ function createMainWindow(): BrowserWindow {
     send(page, "toggle-autohide-menubar", showMenubar, true);
   });
 
-  ipcMain.on("update-badge", (_event, messageCount: number) => {
-    badgeCount = messageCount;
-    BadgeSettings.updateBadge(badgeCount, mainWindow);
-    send(page, "tray", messageCount);
-  });
+  ipcMain.on(
+    "update-badge",
+    (_event, messageCount: number, hasUnreads: boolean) => {
+      badgeCount = messageCount;
+      BadgeSettings.updateBadge(badgeCount, hasUnreads, mainWindow);
+      send(page, "tray", messageCount);
+    },
+  );
 
   ipcMain.on("update-taskbar-icon", (_event, data: string, text: string) => {
     BadgeSettings.updateTaskbarIcon(data, text, mainWindow);
