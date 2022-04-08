@@ -381,7 +381,7 @@ function createMainWindow(): BrowserWindow {
   });
 
   ipcMain.on("toggle-badge-option", () => {
-    BadgeSettings.updateBadge(badgeCount, false, mainWindow);
+    BadgeSettings.updateBadge(badgeCount, badgeCount === 0, mainWindow);
   });
 
   ipcMain.on("toggle-menubar", (_event, showMenubar: boolean) => {
