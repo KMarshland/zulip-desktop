@@ -143,19 +143,6 @@ export default class WebView {
     return remote.webContents.fromId(this.webContentsId)!;
   }
 
-  getHasUnreads(title: string): boolean {
-    return !title.includes('[0]');
-  }
-
-  getBadgeCount(title: string): number {
-    if (!title.startsWith('COUNTS')) {
-      return 0;
-    }
-
-    const messageCountInTitle = /-\((\d+)\)/.exec(title);
-    return messageCountInTitle ? Number(messageCountInTitle[1]) : 0;
-  }
-
   showNotificationSettings(): void {
     this.send("show-notification-settings");
   }
@@ -261,41 +248,41 @@ export default class WebView {
     });
 
     let executed = false;
-      webContents.on("page-title-updated", (_event, title) => {
-        this.badgeCount = this.getBadgeCount(title);
-        this.hasUnreads = this.getHasUnreads(title);
-        this.props.onTitleChange();
+    webContents.on("page-title-updated", (_event, title) => {
+      this.badgeCount = this.getBadgeCount(title);
+      this.hasUnreads = this.getHasUnreads(title);
+      this.props.onTitleChange();
 
-        if (!executed && this.$el) {
-          executed = true;
-          webContents.executeJavaScript('(' + (function () {
+      if (!executed && this.$el) {
+        executed = true;
+        webContents.executeJavaScript('(' + (function () {
+          // @ts-ignore
+          if (!window.pollUnreads) {
             // @ts-ignore
-            if (!window.pollUnreads) {
+            window.pollUnreads = function () {
               // @ts-ignore
-              window.pollUnreads = function () {
-                // @ts-ignore
-                const unreadCount = parseInt(document.querySelector('a[href="#all_messages"] .unread_count').innerText) || 0;
-                // @ts-ignore
-                const mentionCount = parseInt(document.querySelector('a[href="#narrow/is/mentioned"] .unread_count').innerText) || 0;
-                // @ts-ignore
-                const pmCount = parseInt(document.querySelector('a[href="#narrow/is/private"] .unread_count').innerText) || 0;
+              const unreadCount = parseInt(document.querySelector('a[href="#all_messages"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const mentionCount = parseInt(document.querySelector('a[href="#narrow/is/mentioned"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const pmCount = parseInt(document.querySelector('#private_messages_section_header .unread_count').innerText) || 0;
 
-                // @ts-ignore
-                const title = `COUNTS-[${unreadCount}]-(${mentionCount + pmCount})`;
-                if (document.title !== title) {
-                  document.title = title;
-                }
-
-                // @ts-ignore
-                requestAnimationFrame(window.pollUnreads);
+              // @ts-ignore
+              const title = `COUNTS-[${unreadCount}]-(${mentionCount + pmCount})`;
+              if (document.title !== title) {
+                document.title = title;
               }
 
               // @ts-ignore
               requestAnimationFrame(window.pollUnreads);
             }
-          }).toString() + ')();');
-        }
-      });
+
+            // @ts-ignore
+            requestAnimationFrame(window.pollUnreads);
+          }
+        }).toString() + ')();');
+      }
+    });
 
     webContents.on("page-favicon-updated", (_event, favicons) => {
       // This returns a string of favicons URL. If there is a PM counts in unread messages then the URL would be like
@@ -353,8 +340,16 @@ export default class WebView {
     });
   }
 
+  getHasUnreads(title: string): boolean {
+    return !title.includes('[0]');
+  }
+
   private getBadgeCount(title: string): number {
-    const messageCountInTitle = /^\((\d+)\)/.exec(title);
+    if (!title.startsWith('COUNTS')) {
+      return 0;
+    }
+
+    const messageCountInTitle = /-\((\d+)\)/.exec(title);
     return messageCountInTitle ? Number(messageCountInTitle[1]) : 0;
   }
 
