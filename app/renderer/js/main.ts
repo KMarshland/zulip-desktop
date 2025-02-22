@@ -777,17 +777,18 @@ export class ServerManagerView {
 
   async updateBadge(): Promise<void> {
     let messageCountAll = 0;
-    await Promise.all(
-      this.tabs.map(async (tab) => {
-        if (tab && tab instanceof ServerTab && tab.updateBadge) {
-          const count = (await tab.webview).badgeCount;
-          messageCountAll += count;
-          tab.updateBadge(count);
-        }
-      }),
-    );
+    let hasUnreads = false;
 
-    ipcRenderer.send("update-badge", messageCountAll);
+    for (const tab of this.tabs) {
+      if (tab && tab instanceof ServerTab && tab.updateBadge) {
+        const count = (await tab.webview).badgeCount;
+        hasUnreads = hasUnreads || (await tab.webview).hasUnreads;
+        messageCountAll += count;
+        tab.updateBadge(count);
+      }
+    }
+
+    ipcRenderer.send("update-badge", messageCountAll, hasUnreads);
   }
 
   toggleSidebar(show: boolean): void {
