@@ -50,6 +50,7 @@
     "copyright": "©2020 Kandra Labs, Inc.",
     "mac": {
       "category": "public.app-category.productivity",
+      "identity": "zulip-dev",
       "target": [
         {
           "target": "default",

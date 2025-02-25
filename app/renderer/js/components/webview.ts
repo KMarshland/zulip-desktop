@@ -105,6 +105,7 @@ export default class WebView {
 
   badgeCount = 0;
   loading = true;
+  hasUnreads = false;
   private customCss: string | false | null;
   private readonly $webviewsContainer: DOMTokenList;
   private readonly $unsupported: HTMLElement;
@@ -232,10 +233,50 @@ export default class WebView {
       webContents.setAudioMuted(true);
     }
 
+    let executed = false;
     webContents.on("page-title-updated", (_event, title) => {
+      if (!executed && this.$webview) {
+        executed = true;
+        webContents.executeJavaScript('(' + (function () {
+          // @ts-ignore
+          if (!window.pollUnreads) {
+            // @ts-ignore
+            window.pollUnreads = function (fromInterval) {
+              // @ts-ignore
+              const unreadCount = parseInt(document.querySelector('a[href="#recent"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const mentionCount = parseInt(document.querySelector('a[href="#narrow/is/mentioned"] .unread_count').innerText) || 0;
+              // @ts-ignore
+              const pmCount = parseInt(document.querySelector('a[href="#narrow/is/dm"] + .unread_count').innerText) || 0;
+
+              // @ts-ignore
+              const title = `COUNTS-[${unreadCount}]-(${mentionCount + pmCount})`;
+              if (document.title !== title) {
+                document.title = title;
+              }
+
+              if (!fromInterval) {
+                // @ts-ignore
+                requestAnimationFrame(window.pollUnreads);
+              }
+            }
+
+            // @ts-ignore
+            requestAnimationFrame(window.pollUnreads);
+
+            // @ts-ignore
+            window.pollUnreadsInterval = setInterval(() => {
+              // @ts-ignore
+              window.pollUnreads(true);
+            }, 1000);
+          }
+        }).toString() + ')();');
+      }
+
       this.badgeCount = this.getBadgeCount(title);
+      this.hasUnreads = this.getHasUnreads(title);
       this.properties.onTitleChange();
-    });
+  });
 
     this.$webview.addEventListener("did-navigate-in-page", () => {
       this.canGoBackButton();
@@ -301,8 +342,20 @@ export default class WebView {
     });
   }
 
+  getHasUnreads(title: string): boolean {
+    if (!title.startsWith('COUNTS')) {
+      return false;
+    }
+
+    return !title.includes('[0]');
+  }
+
   private getBadgeCount(title: string): number {
-    const messageCountInTitle = /^\((\d+)\)/.exec(title);
+    if (!title.startsWith('COUNTS')) {
+      return 0;
+    }
+
+    const messageCountInTitle = /-\((\d+)\)/.exec(title);
     return messageCountInTitle ? Number(messageCountInTitle[1]) : 0;
   }
 
